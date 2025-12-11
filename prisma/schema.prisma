@@ -1,0 +1,134 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// User model - stores user information from GitHub OAuth
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  githubId      String?   @unique
+  accessToken   String?   // GitHub access token for API calls
+  
+  // Relations
+  reviews       Review[]
+  guidelines    Guideline[]
+  sessions      Session[]
+  accounts      Account[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// Better Auth session model
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  expiresAt    DateTime
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// Better Auth account model (for OAuth providers)
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId         String
+  providerId        String
+  accessToken       String?
+  refreshToken      String?
+  accessTokenExpiresAt DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope             String?
+  idToken           String?
+  password          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([providerId, accountId])
+}
+
+// Verification model for email verification
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// Review model - represents a code review session
+model Review {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  repository  String        // e.g., "owner/repo-name"
+  branch      String
+  commitSha   String?       // Optional: specific commit being reviewed
+  
+  status      String        @default("pending") // pending, processing, completed, failed
+  
+  // Stats
+  filesReviewed Int         @default(0)
+  issuesFound   Int         @default(0)
+  
+  // Relations
+  results     ReviewResult[]
+  
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+// ReviewResult model - individual issues/comments from a review
+model ReviewResult {
+  id          String   @id @default(cuid())
+  reviewId    String
+  review      Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  
+  filePath    String   // e.g., "src/components/Button.tsx"
+  lineNumber  Int
+  endLine     Int?     // For multi-line issues
+  
+  type        String   @default("info") // error, warning, suggestion, info
+  message     String
+  suggestion  String?  // Suggested fix or improvement
+  
+  codeSnippet String?  // The code being commented on
+  
+  createdAt   DateTime @default(now())
+}
+
+// Guideline model - custom coding standards
+model Guideline {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title       String
+  content     String   // The guideline description
+  
+  // For RAG - store embedding reference
+  embeddingId String?  // Pinecone vector ID
+  
+  isActive    Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
